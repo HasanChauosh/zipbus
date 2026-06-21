@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  clerkUserId String    @unique @map("clerk_user_id")
+  name        String
+  email       String    @unique
+  phone       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  bookings    Booking[]
+
+  @@map("users")
+}
+
+model Operator {
+  id           String  @id @default(cuid())
+  name         String
+  logoUrl      String? @map("logo_url")
+  rating       Float   @default(0)
+  contactPhone String? @map("contact_phone")
+
+  buses        Bus[]
+
+  @@map("operators")
+}
+
+model Route {
+  id          String  @id @default(cuid())
+  source      String
+  destination String
+  distanceKm  Float?  @map("distance_km")
+
+  buses       Bus[]
+
+  @@index([source, destination])
+  @@map("routes")
+}
+
+model Bus {
+  id            String   @id @default(cuid())
+  operatorId    String   @map("operator_id")
+  routeId       String   @map("route_id")
+  departureTime DateTime @map("departure_time")
+  arrivalTime   DateTime @map("arrival_time")
+  busType       String   @map("bus_type")
+  totalSeats    Int      @map("total_seats")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  operator      Operator  @relation(fields: [operatorId], references: [id])
+  route         Route     @relation(fields: [routeId], references: [id])
+  seats         Seat[]
+  bookings      Booking[]
+
+  @@index([routeId, departureTime])
+  @@map("buses")
+}
+
+model Seat {
+  id           String  @id @default(cuid())
+  busId        String  @map("bus_id")
+  seatNumber   String  @map("seat_number")
+  tier         String
+  price        Float
+  genderPref   String  @default("ANY") @map("gender_pref")
+  isAvailable  Boolean @default(true) @map("is_available")
+
+  bus          Bus           @relation(fields: [busId], references: [id])
+  bookingSeats BookingSeat[]
+
+  @@map("seats")
+}
+
+model Booking {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  busId           String   @map("bus_id")
+  totalAmount     Float    @map("total_amount")
+  status          String   @default("PENDING")
+  stripePaymentId String?  @unique @map("stripe_payment_id")
+  bookedAt        DateTime @default(now()) @map("booked_at")
+
+  user            User          @relation(fields: [userId], references: [id])
+  bus             Bus           @relation(fields: [busId], references: [id])
+  bookingSeats    BookingSeat[]
+  passenger       Passenger?
+  reminderLogs    ReminderLog[]
+
+  @@map("bookings")
+}
+
+model BookingSeat {
+  id             String  @id @default(cuid())
+  bookingId      String  @map("booking_id")
+  seatId         String  @map("seat_id")
+  priceAtBooking Float   @map("price_at_booking")
+
+  booking        Booking @relation(fields: [bookingId], references: [id])
+  seat           Seat    @relation(fields: [seatId], references: [id])
+
+  @@unique([bookingId, seatId])
+  @@map("booking_seats")
+}
+
+model Passenger {
+  id        String  @id @default(cuid())
+  bookingId String  @unique @map("booking_id")
+  name      String
+  phone     String
+  email     String
+  gender    String
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("passengers")
+}
+
+model ReminderLog {
+  id          String    @id @default(cuid())
+  bookingId   String    @map("booking_id")
+  type        String
+  scheduledAt DateTime  @map("scheduled_at")
+  sentAt      DateTime? @map("sent_at")
+  status      String    @default("PENDING")
+  channel     String
+
+  booking     Booking   @relation(fields: [bookingId], references: [id])
+
+  @@index([status, scheduledAt])
+  @@map("reminder_logs")
+}
+
+model Coupon {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  description  String
+  discountType String    // "FLAT" | "PERCENT"
+  discountValue Float
+  minAmount    Float     @default(0)
+  maxDiscount  Float?
+  isActive     Boolean   @default(true)
+  expiresAt    DateTime?
+  usageLimit   Int?      // null = unlimited
+  usedCount    Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@map("coupons")
+}
